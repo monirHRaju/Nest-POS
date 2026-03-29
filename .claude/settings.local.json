@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(cp -r nest-pos-app/src nest-pos-app/public nest-pos-app/package.json nest-pos-app/package-lock.json nest-pos-app/tsconfig.json nest-pos-app/next.config.ts nest-pos-app/eslint.config.mjs nest-pos-app/postcss.config.mjs nest-pos-app/next-env.d.ts \"Nest-POS/\")",
+      "Bash(cp -r nest-pos-app/node_modules \"Nest-POS/\")",
+      "Bash(npm install:*)",
+      "Bash(npx next:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(rm -f .next/build.lock)",
+      "Bash(npx tsx:*)"
+    ]
+  }
+}
