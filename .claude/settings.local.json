@@ -8,7 +8,8 @@
       "Bash(npx next:*)",
       "Bash(taskkill //F //IM node.exe)",
       "Bash(rm -f .next/build.lock)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(test -f \"e:/Web Apps/Agentic Coding/SaaS Applications/POS_SOFTWARE/Nest-POS/src/app/\\(dashboard\\)/settings/permissions/page.tsx\")"
     ]
   }
 }

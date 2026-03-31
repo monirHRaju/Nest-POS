@@ -1,0 +1,7 @@
+To run locally:
+
+docker-compose up -d          # Start PostgreSQL + Redis
+npx prisma migrate dev        # Run migrations
+npm run db:seed               # Seed demo data
+npm run dev                   # Start dev server
+Login: admin@nestpos.com / admin123
