@@ -5,36 +5,39 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      tenantId: string;
+      tenantId: string | null;
       email: string;
       firstName: string;
       lastName: string;
-      role: UserRole;
+      role: UserRole | null;
       warehouseId: string | null;
       permissions: Record<string, boolean>;
+      isSuperAdmin: boolean;
       image?: string | null;
     };
   }
 
   interface User {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     firstName: string;
     lastName: string;
-    role: UserRole;
+    role: UserRole | null;
     warehouseId: string | null;
     groupPermissions: Record<string, boolean>;
+    isSuperAdmin: boolean;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     firstName: string;
     lastName: string;
-    role: UserRole;
+    role: UserRole | null;
     warehouseId: string | null;
     permissions: Record<string, boolean>;
+    isSuperAdmin: boolean;
   }
 }

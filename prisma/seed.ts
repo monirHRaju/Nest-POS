@@ -9,6 +9,18 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding database...");
 
+  // Create super admin
+  const superAdminPassword = await bcrypt.hash("superadmin123", 12);
+  await prisma.superAdmin.upsert({
+    where: { email: "super@nestpos.com" },
+    update: {},
+    create: {
+      name: "Super Admin",
+      email: "super@nestpos.com",
+      password: superAdminPassword,
+    },
+  });
+
   // Create a demo tenant
   const tenant = await prisma.tenant.upsert({
     where: { slug: "organic-agriculture" },
@@ -193,7 +205,8 @@ async function main() {
   }
 
   console.log("Seed completed!");
-  console.log("Login with: admin@nestpos.com / admin123");
+  console.log("Admin login:      admin@nestpos.com / admin123");
+  console.log("SuperAdmin login: super@nestpos.com / superadmin123");
 }
 
 main()

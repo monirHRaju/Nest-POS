@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-// Public routes that don't require authentication
 const publicRoutes = ["/login", "/register", "/forgot-password"];
-
-// Routes that are always accessible
 const alwaysPublic = ["/api/auth", "/api/webhooks"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public API routes
   if (alwaysPublic.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
-  // Allow static files and Next.js internals
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
@@ -24,23 +20,31 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for auth token
-  const token =
-    request.cookies.get("authjs.session-token")?.value ||
-    request.cookies.get("__Secure-authjs.session-token")?.value;
-
+  const token = await getToken({ req: request, secret: process.env.AUTH_SECRET });
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+  const isSuperAdminRoute = pathname.startsWith("/super-admin");
 
-  // Redirect unauthenticated users to login
   if (!token && !isPublicRoute) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect authenticated users away from auth pages
   if (token && isPublicRoute) {
+    const dest = token.isSuperAdmin ? "/super-admin" : "/";
+    return NextResponse.redirect(new URL(dest, request.url));
+  }
+
+  // Super-admin route: only super admins allowed
+  if (isSuperAdminRoute && token && !token.isSuperAdmin) {
     return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  // Regular users can't access super-admin routes
+  if (isSuperAdminRoute && !token) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
