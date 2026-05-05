@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Papa from "papaparse";
 
 interface DataTableProps<T> {
@@ -21,6 +21,7 @@ interface DataTableProps<T> {
   loading?: boolean;
   exportFilename?: string;
   searchPlaceholder?: string;
+  toolbar?: React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -35,8 +36,10 @@ export function DataTable<T extends Record<string, any>>({
   loading = false,
   exportFilename = "export",
   searchPlaceholder = "Search...",
+  toolbar,
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   const table = useReactTable({
     data,
@@ -44,12 +47,18 @@ export function DataTable<T extends Record<string, any>>({
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-    onSearch?.(value);
-  };
+  // Debounce search 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    onSearch?.(debouncedQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery]);
 
   const handleExportCSV = () => {
     const csv = Papa.unparse(data);
@@ -62,35 +71,55 @@ export function DataTable<T extends Record<string, any>>({
     window.URL.revokeObjectURL(url);
   };
 
+  const start = data.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
   return (
-    <div className="space-y-4">
-      {/* Header with search and actions */}
-      <div className="flex items-center justify-between gap-4">
-        <input
-          type="text"
-          placeholder={searchPlaceholder}
-          className="input input-bordered w-full max-w-xs"
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          onClick={handleExportCSV}
-          className="btn btn-outline btn-sm"
-          disabled={loading || data.length === 0}
-        >
-          📥 Export CSV
-        </button>
+    <div className="card bg-base-100 shadow-sm border border-base-200">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-base-200">
+        <div className="flex items-center gap-2 flex-1 min-w-64 max-w-md">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none">🔍</span>
+            <input
+              type="text"
+              placeholder={searchPlaceholder}
+              className="input input-bordered w-full pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={loading}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 btn btn-xs btn-circle btn-ghost"
+              >✕</button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {toolbar}
+          <button
+            onClick={handleExportCSV}
+            className="btn btn-outline btn-sm gap-1"
+            disabled={loading || data.length === 0}
+          >
+            <span>📥</span> Export
+          </button>
+        </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-base-300 rounded-lg">
-        <table className="table table-zebra w-full">
+      <div className="overflow-x-auto">
+        <table className="table">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-base-200">
+              <tr key={headerGroup.id} className="bg-base-200/50 border-b border-base-300">
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="text-sm">
+                  <th
+                    key={header.id}
+                    className="text-xs font-semibold uppercase tracking-wider text-base-content/70 py-3"
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -102,21 +131,24 @@ export function DataTable<T extends Record<string, any>>({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={columns.length} className="text-center py-8">
-                  <span className="loading loading-spinner loading-md"></span>
+                <td colSpan={columns.length} className="text-center py-12">
+                  <span className="loading loading-spinner loading-md text-primary" />
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="text-center py-8 text-base-content/60">
-                  No data found
+                <td colSpan={columns.length} className="text-center py-12 text-base-content/50">
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-4xl opacity-30">📭</span>
+                    <span>No data found</span>
+                  </div>
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-base-100">
+                <tr key={row.id} className="hover:bg-base-200/40 transition-colors border-b border-base-200 last:border-0">
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="py-3">
+                    <td key={cell.id} className="py-3 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -128,13 +160,14 @@ export function DataTable<T extends Record<string, any>>({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-t border-base-200">
         <div className="text-sm text-base-content/60">
-          Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1} to{" "}
-          {Math.min(page * pageSize, total)} of {total} results
+          {data.length === 0 ? "No results" : (
+            <>Showing <span className="font-medium text-base-content">{start}</span>–<span className="font-medium text-base-content">{end}</span> of <span className="font-medium text-base-content">{total}</span></>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -142,32 +175,36 @@ export function DataTable<T extends Record<string, any>>({
             disabled={loading}
           >
             {[10, 20, 50, 100].map((size) => (
-              <option key={size} value={size}>
-                {size} per page
-              </option>
+              <option key={size} value={size}>{size} / page</option>
             ))}
           </select>
 
-          <div className="flex items-center gap-1">
+          <div className="join">
+            <button
+              onClick={() => onPageChange(1)}
+              disabled={loading || page === 1}
+              className="join-item btn btn-sm btn-ghost"
+              title="First"
+            >«</button>
             <button
               onClick={() => onPageChange(Math.max(1, page - 1))}
               disabled={loading || page === 1}
-              className="btn btn-sm btn-outline"
-            >
-              ← Prev
+              className="join-item btn btn-sm btn-ghost"
+            >‹</button>
+            <button className="join-item btn btn-sm btn-ghost no-animation pointer-events-none">
+              {page} / {totalPages}
             </button>
-
-            <span className="px-4 py-2 text-sm">
-              Page {page} of {totalPages || 1}
-            </span>
-
             <button
               onClick={() => onPageChange(Math.min(totalPages, page + 1))}
               disabled={loading || page >= totalPages}
-              className="btn btn-sm btn-outline"
-            >
-              Next →
-            </button>
+              className="join-item btn btn-sm btn-ghost"
+            >›</button>
+            <button
+              onClick={() => onPageChange(totalPages)}
+              disabled={loading || page >= totalPages}
+              className="join-item btn btn-sm btn-ghost"
+              title="Last"
+            >»</button>
           </div>
         </div>
       </div>
