@@ -26,7 +26,9 @@ function LoginForm() {
 
     setLoading(false);
 
-    if (result?.error) {
+    // NextAuth v5 returns { url } even on failure — check for /login redirect
+    const failed = !!result?.error || (result?.url && new URL(result.url).pathname === "/login");
+    if (failed) {
       setError("Invalid email or password");
     } else {
       router.push(callbackUrl);

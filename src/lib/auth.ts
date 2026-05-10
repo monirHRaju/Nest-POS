@@ -56,7 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         // Fall back to super admin (no tenant scope)
-        const superAdmin = await prisma.superAdmin.findUnique({
+        const superAdmin = await prisma.superAdmin.findFirst({
           where: { email, isActive: true },
         });
 
