@@ -16,13 +16,13 @@ const updateSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const warehouse = await user.db.warehouse.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
   });
 
   if (!warehouse) {
@@ -34,7 +34,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -46,7 +46,7 @@ export async function PUT(
 
     // Check warehouse exists
     const existing = await user.db.warehouse.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -87,7 +87,7 @@ export async function PUT(
     }
 
     const updated = await user.db.warehouse.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data,
     });
 
@@ -103,7 +103,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -111,7 +111,7 @@ export async function DELETE(
   try {
     // Check warehouse exists
     const existing = await user.db.warehouse.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -125,7 +125,7 @@ export async function DELETE(
 
     // Check if warehouse has stock
     const stockCount = await user.db.productWarehouseStock.count({
-      where: { warehouseId: params.id },
+      where: { warehouseId: (await params).id },
     });
 
     if (stockCount > 0) {
@@ -136,7 +136,7 @@ export async function DELETE(
     }
 
     await user.db.warehouse.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Warehouse deleted successfully" });

@@ -9,12 +9,14 @@ const updateSchema = z.object({
   staffNote: z.string().optional().nullable(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
+  const { id } = await params;
+
   const item = await user.db.sale.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       items: true,
       customer: true,
@@ -29,15 +31,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
+
+  const { id } = await params;
 
   try {
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.sale.findUnique({ where: { id: params.id } });
+    const existing = await user.db.sale.findUnique({ where: { id } });
     if (!existing) return error("Not found", 404);
 
     const data: Record<string, unknown> = {};
@@ -47,17 +51,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     if (parsed.status && parsed.status !== existing.status) {
       // Status transitions: COMPLETED → CANCELED reverses stock
       if (existing.status === "COMPLETED" && parsed.status === "CANCELED") {
-        await applySaleStock(user.tenantId, params.id, existing.warehouseId, 1);
+        await applySaleStock(user.tenantId, id, existing.warehouseId, 1);
       }
       // PENDING → COMPLETED decrements stock
       if (existing.status === "PENDING" && parsed.status === "COMPLETED") {
-        await applySaleStock(user.tenantId, params.id, existing.warehouseId, -1);
+        await applySaleStock(user.tenantId, id, existing.warehouseId, -1);
       }
       data.status = parsed.status;
     }
 
     const updated = await user.db.sale.update({
-      where: { id: params.id },
+      where: { id },
       data,
       include: { items: true, payments: true },
     });
@@ -70,22 +74,24 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
+  const { id } = await params;
+
   try {
-    const existing = await user.db.sale.findUnique({ where: { id: params.id } });
+    const existing = await user.db.sale.findUnique({ where: { id } });
     if (!existing) return error("Not found", 404);
 
     if (existing.status === "COMPLETED") {
       return error("Cannot delete completed sale. Cancel first to reverse stock.", 400);
     }
 
-    const returnsCount = await user.db.return.count({ where: { saleId: params.id } });
+    const returnsCount = await user.db.return.count({ where: { saleId: id } });
     if (returnsCount > 0) return error(`Cannot delete: ${returnsCount} return(s) linked`, 400);
 
-    await user.db.sale.delete({ where: { id: params.id } });
+    await user.db.sale.delete({ where: { id } });
     return ok({ message: "Deleted successfully" });
   } catch (e) {
     console.error("Sale delete error:", e);

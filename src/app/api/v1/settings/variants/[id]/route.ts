@@ -9,13 +9,13 @@ const updateSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const variant = await user.db.variant.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
   });
 
   if (!variant) {
@@ -27,7 +27,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -38,7 +38,7 @@ export async function PUT(
 
     // Check variant exists
     const existing = await user.db.variant.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -56,7 +56,7 @@ export async function PUT(
     }
 
     const updated = await user.db.variant.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         name,
         values,
@@ -75,7 +75,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -83,7 +83,7 @@ export async function DELETE(
   try {
     // Check variant exists
     const existing = await user.db.variant.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -92,7 +92,7 @@ export async function DELETE(
 
     // Check if variant is being used by products
     const productsCount = await user.db.productVariant.count({
-      where: { variantId: params.id },
+      where: { variantId: (await params).id },
     });
 
     if (productsCount > 0) {
@@ -103,7 +103,7 @@ export async function DELETE(
     }
 
     await user.db.variant.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Variant deleted successfully" });

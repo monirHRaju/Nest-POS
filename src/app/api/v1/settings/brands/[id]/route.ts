@@ -9,13 +9,13 @@ const updateBrandSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const brand = await user.db.brand.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
   });
 
   if (!brand) {
@@ -27,7 +27,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -38,7 +38,7 @@ export async function PUT(
 
     // Check brand exists
     const existing = await user.db.brand.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -64,7 +64,7 @@ export async function PUT(
     }
 
     const updated = await user.db.brand.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { name, slug: finalSlug },
     });
 
@@ -80,7 +80,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -88,7 +88,7 @@ export async function DELETE(
   try {
     // Check brand exists
     const existing = await user.db.brand.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -97,7 +97,7 @@ export async function DELETE(
 
     // Check if brand is being used by products
     const productsCount = await user.db.product.count({
-      where: { brandId: params.id },
+      where: { brandId: (await params).id },
     });
 
     if (productsCount > 0) {
@@ -108,7 +108,7 @@ export async function DELETE(
     }
 
     await user.db.brand.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Brand deleted successfully" });

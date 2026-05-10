@@ -11,19 +11,19 @@ const updateSchema = z.object({
   attachment: z.string().optional().nullable(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const item = await user.db.expense.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { category: true, warehouse: true },
   });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -31,11 +31,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.expense.findUnique({ where: { id: params.id } });
+    const existing = await user.db.expense.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     const updated = await user.db.expense.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         date: parsed.date ? new Date(parsed.date) : existing.date,
         categoryId: parsed.categoryId,
@@ -54,14 +54,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.expense.findUnique({ where: { id: params.id } });
+    const existing = await user.db.expense.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
-    await user.db.expense.delete({ where: { id: params.id } });
+    await user.db.expense.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted" });
   } catch (e) {
     console.error("Expense delete error:", e);

@@ -8,19 +8,19 @@ const updateSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const item = await user.db.transfer.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { items: true, fromWarehouse: true, toWarehouse: true },
   });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -28,22 +28,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.transfer.findUnique({ where: { id: params.id } });
+    const existing = await user.db.transfer.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (existing.status !== parsed.status) {
       // PENDING/SENT → COMPLETED: apply stock movement
       if (existing.status !== "COMPLETED" && parsed.status === "COMPLETED") {
-        await applyTransferStock(user.tenantId, params.id, existing.fromWarehouseId, existing.toWarehouseId, 1);
+        await applyTransferStock(user.tenantId, (await params).id, existing.fromWarehouseId, existing.toWarehouseId, 1);
       }
       // COMPLETED → CANCELED: reverse stock movement
       if (existing.status === "COMPLETED" && parsed.status === "CANCELED") {
-        await applyTransferStock(user.tenantId, params.id, existing.fromWarehouseId, existing.toWarehouseId, -1);
+        await applyTransferStock(user.tenantId, (await params).id, existing.fromWarehouseId, existing.toWarehouseId, -1);
       }
     }
 
     const updated = await user.db.transfer.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { status: parsed.status, note: parsed.note },
     });
     return ok(updated);
@@ -54,17 +54,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.transfer.findUnique({ where: { id: params.id } });
+    const existing = await user.db.transfer.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
     if (existing.status === "COMPLETED") {
       return error("Cannot delete completed transfer. Cancel first to reverse stock.", 400);
     }
-    await user.db.transfer.delete({ where: { id: params.id } });
+    await user.db.transfer.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted" });
   } catch (e) {
     console.error("Transfer delete error:", e);

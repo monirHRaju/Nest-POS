@@ -36,12 +36,12 @@ const productIncludes = {
   },
 };
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const product = await user.db.product.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: productIncludes,
   });
 
@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   });
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -61,7 +61,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const data = updateSchema.parse(body);
 
-    const existing = await user.db.product.findUnique({ where: { id: params.id } });
+    const existing = await user.db.product.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Product not found", 404);
 
     // Check code uniqueness (exclude self)
@@ -71,7 +71,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updated = await user.db.product.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         name: data.name,
         code: data.code,
@@ -109,13 +109,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
     const product = await user.db.product.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
       include: { warehouseStocks: { select: { quantity: true } } },
     });
 
@@ -126,7 +126,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return error("Cannot delete product with existing stock. Adjust stock to zero first.", 400);
     }
 
-    await user.db.product.delete({ where: { id: params.id } });
+    await user.db.product.delete({ where: { id: (await params).id } });
     return ok({ message: "Product deleted successfully" });
   } catch (err) {
     console.error("Product deletion error:", err);

@@ -7,16 +7,16 @@ const updateSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
-  const item = await user.db.expenseCategory.findUnique({ where: { id: params.id } });
+  const item = await user.db.expenseCategory.findUnique({ where: { id: (await params).id } });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -24,7 +24,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const { name, description } = updateSchema.parse(body);
 
-    const existing = await user.db.expenseCategory.findUnique({ where: { id: params.id } });
+    const existing = await user.db.expenseCategory.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (name !== existing.name) {
@@ -33,7 +33,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updated = await user.db.expenseCategory.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { name, description: description || null },
     });
 
@@ -45,20 +45,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.expenseCategory.findUnique({ where: { id: params.id } });
+    const existing = await user.db.expenseCategory.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
-    const expensesCount = await user.db.expense.count({ where: { categoryId: params.id } });
+    const expensesCount = await user.db.expense.count({ where: { categoryId: (await params).id } });
     if (expensesCount > 0) {
       return error(`Cannot delete category with ${expensesCount} expense(s)`, 400);
     }
 
-    await user.db.expenseCategory.delete({ where: { id: params.id } });
+    await user.db.expenseCategory.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted successfully" });
   } catch (error) {
     console.error("Error:", error);

@@ -2,15 +2,15 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error } from "@/lib/api-response";
 import { calcPaymentStatus } from "@/lib/services/purchaseService";
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.payment.findUnique({ where: { id: params.id } });
+    const existing = await user.db.payment.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
-    await user.db.payment.delete({ where: { id: params.id } });
+    await user.db.payment.delete({ where: { id: (await params).id } });
 
     // Recalc parent
     if (existing.purchaseId) {

@@ -1,12 +1,12 @@
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error } from "@/lib/api-response";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const adjustment = await user.db.adjustment.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: {
       warehouse: { select: { id: true, name: true } },
       items: {

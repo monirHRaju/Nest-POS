@@ -3,13 +3,13 @@ import { ok, error } from "@/lib/api-response";
 import { generateReferenceNo, calcPaymentStatus } from "@/lib/services/purchaseService";
 import { applySaleStock, validateSaleStock } from "@/lib/services/saleService";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
     const quotation = await user.db.quotation.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
       include: { items: true },
     });
     if (!quotation) return error("Not found", 404);
@@ -75,7 +75,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
     // Mark quotation converted
     await user.db.quotation.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { status: "CONVERTED" },
     });
 

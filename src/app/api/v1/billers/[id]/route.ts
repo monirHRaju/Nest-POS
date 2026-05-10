@@ -12,16 +12,16 @@ const updateSchema = z.object({
   isActive: z.boolean(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
-  const item = await user.db.biller.findUnique({ where: { id: params.id } });
+  const item = await user.db.biller.findUnique({ where: { id: (await params).id } });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -30,10 +30,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const parsed = updateSchema.parse(body);
     const data = { ...parsed, email: parsed.email || null };
 
-    const existing = await user.db.biller.findUnique({ where: { id: params.id } });
+    const existing = await user.db.biller.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
-    const updated = await user.db.biller.update({ where: { id: params.id }, data: data as any });
+    const updated = await user.db.biller.update({ where: { id: (await params).id }, data: data as any });
     return ok(updated);
   } catch (e) {
     if (e instanceof z.ZodError) return error("Validation error", 400);
@@ -42,18 +42,18 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.biller.findUnique({ where: { id: params.id } });
+    const existing = await user.db.biller.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
-    const salesCount = await user.db.sale.count({ where: { billerId: params.id } });
+    const salesCount = await user.db.sale.count({ where: { billerId: (await params).id } });
     if (salesCount > 0) return error(`Cannot delete: ${salesCount} sale(s) linked`, 400);
 
-    await user.db.biller.delete({ where: { id: params.id } });
+    await user.db.biller.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted successfully" });
   } catch (e) {
     console.error("Biller delete error:", e);

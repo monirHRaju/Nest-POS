@@ -8,12 +8,12 @@ const updateSchema = z.object({
   permissions: z.record(z.boolean()),
 });
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const group = await user.db.permissionGroup.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { _count: { select: { users: true } } },
   });
 
@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return ok(group);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -29,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const { name, description, permissions } = updateSchema.parse(body);
 
-    const existing = await user.db.permissionGroup.findUnique({ where: { id: params.id } });
+    const existing = await user.db.permissionGroup.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Permission group not found", 404);
 
     if (name !== existing.name) {
@@ -38,7 +38,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updated = await user.db.permissionGroup.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { name, description: description || null, permissions },
     });
 
@@ -50,13 +50,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
     const existing = await user.db.permissionGroup.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
       include: { _count: { select: { users: true } } },
     });
 
@@ -69,7 +69,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       );
     }
 
-    await user.db.permissionGroup.delete({ where: { id: params.id } });
+    await user.db.permissionGroup.delete({ where: { id: (await params).id } });
     return ok({ message: "Permission group deleted successfully" });
   } catch (err) {
     console.error("Permission group deletion error:", err);

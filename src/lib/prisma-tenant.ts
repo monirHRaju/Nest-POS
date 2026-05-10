@@ -24,12 +24,14 @@ type TenantScopedOperation =
   | "delete"
   | "deleteMany";
 
+// findUnique/findUniqueOrThrow excluded: Prisma validates where clause must match
+// an exact unique constraint — injecting tenantId alongside @id breaks that check.
+// These use cuid @id (globally unique), so tenant isolation is maintained via
+// update/delete injections below.
 const READ_OPERATIONS = new Set<string>([
   "findFirst",
   "findFirstOrThrow",
   "findMany",
-  "findUnique",
-  "findUniqueOrThrow",
   "count",
   "aggregate",
   "groupBy",
@@ -57,8 +59,13 @@ export function getTenantPrisma(tenantId: string) {
 
         const op = operation as TenantScopedOperation;
 
-        // Inject tenantId into WHERE for reads and deletes
-        if (READ_OPERATIONS.has(op) || op === "delete" || WRITE_MANY_OPERATIONS.has(op)) {
+        // Inject tenantId into WHERE for reads, deletes, updateMany, deleteMany
+        if (
+          READ_OPERATIONS.has(op) ||
+          op === "delete" ||
+          op === "updateMany" ||
+          op === "deleteMany"
+        ) {
           const a = args as Record<string, unknown>;
           a.where = { ...(a.where as object || {}), tenantId };
           return query(a);
@@ -68,6 +75,18 @@ export function getTenantPrisma(tenantId: string) {
         if (op === "create") {
           const a = args as Record<string, unknown>;
           a.data = { ...(a.data as object || {}), tenantId };
+          return query(a);
+        }
+
+        // createMany: inject tenantId into each row of data array
+        if (op === "createMany") {
+          const a = args as Record<string, unknown>;
+          const data = a.data;
+          if (Array.isArray(data)) {
+            a.data = data.map((row) => ({ ...(row as object), tenantId }));
+          } else if (data && typeof data === "object") {
+            a.data = { ...(data as object), tenantId };
+          }
           return query(a);
         }
 

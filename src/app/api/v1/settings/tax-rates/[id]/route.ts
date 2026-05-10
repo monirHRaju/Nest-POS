@@ -10,13 +10,13 @@ const updateTaxRateSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const taxRate = await user.db.taxRate.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
   });
 
   if (!taxRate) {
@@ -28,7 +28,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -39,7 +39,7 @@ export async function PUT(
 
     // Check tax rate exists
     const existing = await user.db.taxRate.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -57,7 +57,7 @@ export async function PUT(
     }
 
     const updated = await user.db.taxRate.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { name, rate, type },
     });
 
@@ -73,7 +73,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -81,7 +81,7 @@ export async function DELETE(
   try {
     // Check tax rate exists
     const existing = await user.db.taxRate.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -90,11 +90,11 @@ export async function DELETE(
 
     // Check if tax rate is being used by products or sales
     const productsCount = await user.db.product.count({
-      where: { taxId: params.id },
+      where: { taxId: (await params).id },
     });
 
     const saleItemsCount = await user.db.saleItem.count({
-      where: { taxId: params.id },
+      where: { taxId: (await params).id },
     });
 
     if (productsCount > 0 || saleItemsCount > 0) {
@@ -105,7 +105,7 @@ export async function DELETE(
     }
 
     await user.db.taxRate.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Tax rate deleted successfully" });

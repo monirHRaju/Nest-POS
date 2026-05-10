@@ -33,19 +33,19 @@ const PUBLIC_FIELDS = {
   warehouse: { select: { id: true, name: true } },
 };
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const item = await user.db.user.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     select: PUBLIC_FIELDS,
   });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -53,7 +53,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.user.findUnique({ where: { id: params.id } });
+    const existing = await user.db.user.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (parsed.email !== existing.email) {
@@ -74,7 +74,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updated = await user.db.user.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data,
       select: PUBLIC_FIELDS,
     });
@@ -86,14 +86,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    if (params.id === user.id) return error("Cannot delete yourself", 400);
+    if ((await params).id === user.id) return error("Cannot delete yourself", 400);
 
-    const existing = await user.db.user.findUnique({ where: { id: params.id } });
+    const existing = await user.db.user.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (existing.role === "OWNER") {
@@ -101,10 +101,10 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
       if (ownerCount <= 1) return error("Cannot delete last OWNER", 400);
     }
 
-    const salesCount = await user.db.sale.count({ where: { userId: params.id } });
+    const salesCount = await user.db.sale.count({ where: { userId: (await params).id } });
     if (salesCount > 0) return error(`Cannot delete: ${salesCount} sale(s) linked`, 400);
 
-    await user.db.user.delete({ where: { id: params.id } });
+    await user.db.user.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted successfully" });
   } catch (e) {
     console.error("User delete error:", e);

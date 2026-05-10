@@ -12,13 +12,13 @@ const updateUnitSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const unit = await user.db.unit.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
   });
 
   if (!unit) {
@@ -30,7 +30,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -42,7 +42,7 @@ export async function PUT(
 
     // Check unit exists
     const existing = await user.db.unit.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -60,7 +60,7 @@ export async function PUT(
     }
 
     const updated = await user.db.unit.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         name,
         shortName,
@@ -82,7 +82,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -90,7 +90,7 @@ export async function DELETE(
   try {
     // Check unit exists
     const existing = await user.db.unit.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -99,7 +99,7 @@ export async function DELETE(
 
     // Check if unit is being used by products
     const productsCount = await user.db.product.count({
-      where: { unitId: params.id },
+      where: { unitId: (await params).id },
     });
 
     if (productsCount > 0) {
@@ -110,7 +110,7 @@ export async function DELETE(
     }
 
     await user.db.unit.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Unit deleted successfully" });

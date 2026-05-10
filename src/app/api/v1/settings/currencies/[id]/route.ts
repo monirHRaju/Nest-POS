@@ -9,16 +9,16 @@ const updateSchema = z.object({
   exchangeRate: z.number().positive(),
 });
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
-  const item = await user.db.currency.findUnique({ where: { id: params.id } });
+  const item = await user.db.currency.findUnique({ where: { id: (await params).id } });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -26,7 +26,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const { name, code, symbol, exchangeRate } = updateSchema.parse(body);
 
-    const existing = await user.db.currency.findUnique({ where: { id: params.id } });
+    const existing = await user.db.currency.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (code !== existing.code) {
@@ -35,7 +35,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updated = await user.db.currency.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { name, code, symbol, exchangeRate },
     });
 
@@ -47,12 +47,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.currency.findUnique({ where: { id: params.id } });
+    const existing = await user.db.currency.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     // Can't delete if it's the default currency for the tenant
@@ -60,11 +60,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       where: { tenantId: user.tenantId },
     });
 
-    if (tenantSettings && tenantSettings.defaultCurrencyId === params.id) {
+    if (tenantSettings && tenantSettings.defaultCurrencyId === (await params).id) {
       return error("Cannot delete the default currency", 400);
     }
 
-    await user.db.currency.delete({ where: { id: params.id } });
+    await user.db.currency.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted successfully" });
   } catch (error) {
     console.error("Error:", error);

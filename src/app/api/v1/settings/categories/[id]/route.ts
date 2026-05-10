@@ -10,13 +10,13 @@ const updateSchema = z.object({
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const category = await user.db.category.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: {
       parent: {
         select: { id: true, name: true },
@@ -33,7 +33,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -44,7 +44,7 @@ export async function PUT(
 
     // Check category exists
     const existing = await user.db.category.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -70,7 +70,7 @@ export async function PUT(
     }
 
     // Prevent circular reference: category cannot be its own parent
-    if (parentId === params.id) {
+    if (parentId === (await params).id) {
       return error("Category cannot be its own parent", 400);
     }
 
@@ -87,7 +87,7 @@ export async function PUT(
       const parentIds = new Set<string>();
       let current = parentId;
       while (current) {
-        if (current === params.id) {
+        if (current === (await params).id) {
           return error("This would create a circular reference", 400);
         }
         parentIds.add(current);
@@ -97,7 +97,7 @@ export async function PUT(
     }
 
     const updated = await user.db.category.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         name,
         slug: finalSlug,
@@ -122,7 +122,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
@@ -130,7 +130,7 @@ export async function DELETE(
   try {
     // Check category exists
     const existing = await user.db.category.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     if (!existing) {
@@ -139,7 +139,7 @@ export async function DELETE(
 
     // Check if category has child categories
     const childrenCount = await user.db.category.count({
-      where: { parentId: params.id },
+      where: { parentId: (await params).id },
     });
 
     if (childrenCount > 0) {
@@ -148,7 +148,7 @@ export async function DELETE(
 
     // Check if category is being used by products
     const productsCount = await user.db.product.count({
-      where: { categoryId: params.id },
+      where: { categoryId: (await params).id },
     });
 
     if (productsCount > 0) {
@@ -159,7 +159,7 @@ export async function DELETE(
     }
 
     await user.db.category.delete({
-      where: { id: params.id },
+      where: { id: (await params).id },
     });
 
     return ok({ message: "Category deleted successfully" });

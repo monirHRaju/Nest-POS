@@ -38,12 +38,12 @@ const updateSchema = z.object({
   attachment: z.string().optional().nullable(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const item = await user.db.purchase.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: {
       items: true,
       supplier: true,
@@ -56,7 +56,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -64,7 +64,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.purchase.findUnique({ where: { id: params.id } });
+    const existing = await user.db.purchase.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (existing.status === "RECEIVED" && parsed.status !== "RECEIVED" && parsed.status !== "CANCELED") {
@@ -72,7 +72,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
     if (existing.status === "RECEIVED" && parsed.status === "CANCELED") {
       // Reverse stock
-      await applyPurchaseStock(user.tenantId, params.id, existing.warehouseId, -1);
+      await applyPurchaseStock(user.tenantId, (await params).id, existing.warehouseId, -1);
     }
 
     const wasReceived = existing.status === "RECEIVED";
@@ -80,10 +80,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const paymentStatus = calcPaymentStatus(parsed.grandTotal, parsed.paidAmount);
 
     // Replace items: delete + recreate
-    await user.db.purchaseItem.deleteMany({ where: { purchaseId: params.id } });
+    await user.db.purchaseItem.deleteMany({ where: { purchaseId: (await params).id } });
 
     const updated = await user.db.purchase.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         date: parsed.date ? new Date(parsed.date) : existing.date,
         supplierId: parsed.supplierId || null,
@@ -125,7 +125,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
     // Apply stock if transitioning to RECEIVED
     if (!wasReceived && willBeReceived) {
-      await applyPurchaseStock(user.tenantId, params.id, parsed.warehouseId, 1);
+      await applyPurchaseStock(user.tenantId, (await params).id, parsed.warehouseId, 1);
     }
 
     return ok(updated);
@@ -136,24 +136,24 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.purchase.findUnique({ where: { id: params.id } });
+    const existing = await user.db.purchase.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
     if (existing.status === "RECEIVED") {
       return error("Cannot delete RECEIVED purchase. Cancel first to reverse stock.", 400);
     }
 
-    const paymentsCount = await user.db.payment.count({ where: { purchaseId: params.id } });
+    const paymentsCount = await user.db.payment.count({ where: { purchaseId: (await params).id } });
     if (paymentsCount > 0) {
       return error(`Cannot delete: ${paymentsCount} payment(s) recorded`, 400);
     }
 
-    await user.db.purchase.delete({ where: { id: params.id } });
+    await user.db.purchase.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted successfully" });
   } catch (e) {
     console.error("Purchase delete error:", e);

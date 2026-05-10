@@ -11,12 +11,12 @@ const updateItemsSchema = z.object({
   ),
 });
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const stockCount = await user.db.stockCount.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: {
       warehouse: { select: { id: true, name: true } },
       items: {
@@ -39,7 +39,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return ok(stockCount);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -48,7 +48,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const { action } = body;
 
     const stockCount = await user.db.stockCount.findUnique({
-      where: { id: params.id },
+      where: { id: (await params).id },
       include: { items: true },
     });
 
@@ -73,7 +73,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         }
 
         await tx.stockCount.update({
-          where: { id: params.id },
+          where: { id: (await params).id },
           data: { status: "IN_PROGRESS" },
         });
       });
@@ -84,7 +84,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     // Finalize: generate adjustment + mark completed
     if (action === "finalize") {
       const freshItems = await user.db.stockCountItem.findMany({
-        where: { stockCountId: params.id },
+        where: { stockCountId: (await params).id },
       });
 
       const discrepancies = freshItems.filter(
@@ -172,7 +172,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
         // Mark completed
         await tx.stockCount.update({
-          where: { id: params.id },
+          where: { id: (await params).id },
           data: { status: "COMPLETED" },
         });
       });

@@ -29,19 +29,19 @@ const updateSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   const item = await user.db.quotation.findUnique({
-    where: { id: params.id },
+    where: { id: (await params).id },
     include: { items: true, customer: true },
   });
   if (!item) return error("Not found", 404);
   return ok(item);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
@@ -49,13 +49,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const body = await req.json();
     const parsed = updateSchema.parse(body);
 
-    const existing = await user.db.quotation.findUnique({ where: { id: params.id } });
+    const existing = await user.db.quotation.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
 
-    await user.db.quotationItem.deleteMany({ where: { quotationId: params.id } });
+    await user.db.quotationItem.deleteMany({ where: { quotationId: (await params).id } });
 
     const updated = await user.db.quotation.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         date: parsed.date ? new Date(parsed.date) : existing.date,
         expiryDate: parsed.expiryDate ? new Date(parsed.expiryDate) : null,
@@ -93,15 +93,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return error("Unauthorized", 401);
 
   try {
-    const existing = await user.db.quotation.findUnique({ where: { id: params.id } });
+    const existing = await user.db.quotation.findUnique({ where: { id: (await params).id } });
     if (!existing) return error("Not found", 404);
     if (existing.status === "CONVERTED") return error("Cannot delete converted quotation", 400);
-    await user.db.quotation.delete({ where: { id: params.id } });
+    await user.db.quotation.delete({ where: { id: (await params).id } });
     return ok({ message: "Deleted" });
   } catch (e) {
     console.error("Quotation delete error:", e);
