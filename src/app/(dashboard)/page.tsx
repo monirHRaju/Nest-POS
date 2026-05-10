@@ -3,6 +3,21 @@
 import { useCurrentSession } from "@/lib/hooks/useSession";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 interface DashboardStats {
   todaySales: number;
@@ -19,7 +34,12 @@ interface DashboardStats {
     createdAt: string;
     customerName: string;
   }>;
+  salesTrend: Array<{ date: string; total: number; orders: number }>;
+  topProducts: Array<{ name: string; qty: number; revenue: number }>;
+  stockByWarehouse: Array<{ name: string; qty: number }>;
 }
+
+const PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 function StatCard({
   title,
@@ -49,11 +69,7 @@ function StatCard({
               stroke="currentColor"
               strokeWidth={1.5}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d={icon}
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
             </svg>
           </div>
         </div>
@@ -96,44 +112,125 @@ export default function DashboardPage() {
   }
 
   const currencySymbol = "৳";
+  const fmtCurrency = (n: number) =>
+    `${currencySymbol}${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">
-        Welcome, {user?.firstName}!
-      </h1>
+      <h1 className="text-2xl font-bold">Welcome, {user?.firstName}!</h1>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Today's Sales"
-          value={`${currencySymbol}${(stats?.todaySales ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={fmtCurrency(stats?.todaySales ?? 0)}
           icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
           color="info"
         />
         <StatCard
           title="Today's Purchases"
-          value={`${currencySymbol}${(stats?.todayPurchases ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={fmtCurrency(stats?.todayPurchases ?? 0)}
           icon="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"
           color="success"
         />
         <StatCard
           title="Today's Returns"
-          value={`${currencySymbol}${(stats?.todayReturns ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={fmtCurrency(stats?.todayReturns ?? 0)}
           icon="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z"
           color="warning"
         />
         <StatCard
           title="Today's Expenses"
-          value={`${currencySymbol}${(stats?.todayExpenses ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          value={fmtCurrency(stats?.todayExpenses ?? 0)}
           icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
           color="error"
         />
       </div>
 
-      {/* Summary + Recent Sales */}
+      {/* Sales Trend Chart */}
+      <div className="card bg-base-100 shadow-md">
+        <div className="card-body">
+          <h2 className="card-title text-lg">Sales — Last 30 Days</h2>
+          {stats?.salesTrend && stats.salesTrend.length > 0 ? (
+            <div className="h-72 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={stats.salesTrend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(val, name) =>
+                      name === "Sales" ? fmtCurrency(Number(val)) : Number(val)
+                    }
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="total" name="Sales" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="orders" name="Orders" stroke="#10b981" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-center text-base-content/50 py-12">No sales in last 30 days</p>
+          )}
+        </div>
+      </div>
+
+      {/* Top Products + Stock By Warehouse */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card bg-base-100 shadow-md">
+          <div className="card-body">
+            <h2 className="card-title text-lg">Top Products (Last 30d)</h2>
+            {stats?.topProducts && stats.topProducts.length > 0 ? (
+              <div className="h-64 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.topProducts} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="qty" name="Units sold" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-base-content/50 py-12">No product sales</p>
+            )}
+          </div>
+        </div>
+
+        <div className="card bg-base-100 shadow-md">
+          <div className="card-body">
+            <h2 className="card-title text-lg">Stock by Warehouse</h2>
+            {stats?.stockByWarehouse && stats.stockByWarehouse.length > 0 ? (
+              <div className="h-64 mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.stockByWarehouse}
+                      dataKey="qty"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      label={(entry) => entry.name}
+                    >
+                      {stats.stockByWarehouse.map((_, idx) => (
+                        <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-base-content/50 py-12">No stock data</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Stats + Latest Sales */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Stats */}
         <div className="card bg-base-100 shadow-md">
           <div className="card-body">
             <h2 className="card-title text-lg">Quick Stats</h2>
@@ -156,7 +253,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent Sales */}
         <div className="card bg-base-100 shadow-md lg:col-span-2">
           <div className="card-body">
             <h2 className="card-title text-lg">Latest Sales</h2>
@@ -176,12 +272,7 @@ export default function DashboardPage() {
                       <tr key={sale.id}>
                         <td className="font-mono text-sm">{sale.referenceNo}</td>
                         <td>{sale.customerName}</td>
-                        <td>
-                          {currencySymbol}
-                          {parseFloat(sale.grandTotal).toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </td>
+                        <td>{fmtCurrency(parseFloat(sale.grandTotal))}</td>
                         <td className="text-sm text-base-content/70">
                           {format(new Date(sale.createdAt), "dd-MM-yyyy HH:mm")}
                         </td>

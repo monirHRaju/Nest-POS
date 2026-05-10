@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getTenantPrisma } from "@/lib/prisma-tenant";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
@@ -9,12 +10,16 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getTenantPrisma(session.user.tenantId);
+    const tenantId = session.user.tenantId;
+    const db = getTenantPrisma(tenantId);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const trendStart = new Date(today);
+    trendStart.setDate(trendStart.getDate() - 29);
 
     const [
       todaySalesAgg,
@@ -50,16 +55,55 @@ export async function GET() {
       }),
     ]);
 
-    // Count products below alert quantity
-    const { prisma } = await import("@/lib/prisma");
+    // Low stock: count products at/below alertQuantity
     const lowStockCount = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(DISTINCT p.id)::bigint as count
       FROM products p
       JOIN product_warehouse_stocks pws ON p.id = pws."productId"
-      WHERE p."tenantId" = ${session.user.tenantId}
+      WHERE p."tenantId" = ${tenantId}
         AND p."isActive" = true
         AND p."alertQuantity" > 0
         AND pws.quantity <= p."alertQuantity"
+    `;
+
+    // Sales trend: last 30 days, grouped by date
+    const salesTrendRaw = await prisma.$queryRaw<Array<{ day: Date; total: number; orders: bigint }>>`
+      SELECT DATE_TRUNC('day', date) AS day,
+             COALESCE(SUM("grandTotal"), 0)::float AS total,
+             COUNT(*)::bigint AS orders
+      FROM sales
+      WHERE "tenantId" = ${tenantId}
+        AND date >= ${trendStart}
+        AND status = 'COMPLETED'
+      GROUP BY day
+      ORDER BY day ASC
+    `;
+
+    // Top 5 products by qty sold (last 30d)
+    const topProducts = await prisma.$queryRaw<Array<{ productName: string; qty: number; revenue: number }>>`
+      SELECT si."productName" AS "productName",
+             SUM(si.quantity)::float AS qty,
+             SUM(si.subtotal)::float AS revenue
+      FROM sale_items si
+      JOIN sales s ON s.id = si."saleId"
+      WHERE si."tenantId" = ${tenantId}
+        AND s.date >= ${trendStart}
+        AND s.status = 'COMPLETED'
+      GROUP BY si."productName"
+      ORDER BY qty DESC
+      LIMIT 5
+    `;
+
+    // Stock by warehouse (top 5 warehouses by qty)
+    const stockByWarehouse = await prisma.$queryRaw<Array<{ warehouseName: string; qty: number }>>`
+      SELECT w.name AS "warehouseName",
+             COALESCE(SUM(pws.quantity), 0)::float AS qty
+      FROM warehouses w
+      LEFT JOIN product_warehouse_stocks pws ON pws."warehouseId" = w.id
+      WHERE w."tenantId" = ${tenantId}
+      GROUP BY w.id, w.name
+      ORDER BY qty DESC
+      LIMIT 5
     `;
 
     return NextResponse.json({
@@ -76,6 +120,20 @@ export async function GET() {
         grandTotal: s.grandTotal.toString(),
         createdAt: s.createdAt.toISOString(),
         customerName: s.customer?.name ?? "Walk-in Customer",
+      })),
+      salesTrend: salesTrendRaw.map((r) => ({
+        date: r.day.toISOString().slice(0, 10),
+        total: Number(r.total),
+        orders: Number(r.orders),
+      })),
+      topProducts: topProducts.map((p) => ({
+        name: p.productName,
+        qty: Number(p.qty),
+        revenue: Number(p.revenue),
+      })),
+      stockByWarehouse: stockByWarehouse.map((w) => ({
+        name: w.warehouseName,
+        qty: Number(w.qty),
       })),
     });
   } catch (error) {
