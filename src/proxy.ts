@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 const publicRoutes = ["/login", "/register", "/forgot-password"];
 const alwaysPublic = ["/api/auth", "/api/webhooks"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (alwaysPublic.some((route) => pathname.startsWith(route))) {
@@ -20,7 +20,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req: request, secret: process.env.AUTH_SECRET });
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+  });
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
   const isSuperAdminRoute = pathname.startsWith("/super-admin");
 
