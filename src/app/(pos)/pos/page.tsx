@@ -17,11 +17,14 @@ import { useGetProductsQuery, Product } from "@/store/api/productsApi";
 import { useCreateSaleMutation, SaleInput, SalePaymentInput, Sale } from "@/store/api/salesApi";
 import { useCurrentSession } from "@/lib/hooks/useSession";
 import { useBarcodeScanner } from "@/lib/hooks/useBarcodeScanner";
+import { useCustomerDisplaySync } from "@/lib/hooks/useCustomerDisplaySync";
 import { ProductGrid } from "@/components/pos/ProductGrid";
 import { CartPanel } from "@/components/pos/CartPanel";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
 import { HeldOrdersModal } from "@/components/pos/HeldOrdersModal";
 import { Receipt } from "@/components/pos/Receipt";
+import { useGetPrintersQuery } from "@/store/api/printersApi";
+import { buildReceipt, printOnce } from "@/lib/hardware/escpos";
 import toast from "react-hot-toast";
 
 export default function POSPage() {
@@ -38,6 +41,7 @@ export default function POSPage() {
   const { data: customersData } = useGetCustomersQuery({ pageSize: 200 });
   const { data: warehousesData } = useGetWarehousesQuery({ pageSize: 100 });
   const { data: taxesData } = useGetTaxRatesQuery({ pageSize: 100 });
+  const { data: printersData } = useGetPrintersQuery({ pageSize: 50 });
   const [createSale, { isLoading: isCreating }] = useCreateSaleMutation();
 
   // Init defaults
@@ -58,6 +62,12 @@ export default function POSPage() {
     }
   }, [customersData, cart.customerId, dispatch]);
 
+  // Sync cart to customer display
+  const customerName = useMemo(
+    () => customersData?.data?.find((c: any) => c.id === cart.customerId)?.name ?? null,
+    [customersData, cart.customerId]
+  );
+
   // Cart totals (mirror CartPanel)
   const totals = useMemo(() => {
     const subtotal = cart.items.reduce((sum, it) => {
@@ -75,6 +85,33 @@ export default function POSPage() {
     const grandTotal = Math.max(0, subtotal + orderTaxAmount - discountAmount);
     return { subtotal, orderTaxAmount, discountAmount, grandTotal };
   }, [cart]);
+
+  const displayPayload = useMemo(() => ({
+    items: cart.items.map((it) => {
+      const lineGross = it.unitPrice * it.quantity;
+      const disc = it.discountType === "PERCENTAGE" ? (lineGross * it.discount) / 100 : it.discount;
+      const lineNet = Math.max(0, lineGross - disc);
+      const tax = (lineNet * it.taxRate) / 100;
+      return {
+        productId: it.productId,
+        productName: it.productName,
+        productCode: it.productCode,
+        unitPrice: it.unitPrice,
+        quantity: it.quantity,
+        lineTotal: lineNet + tax,
+      };
+    }),
+    subtotal: totals.subtotal,
+    tax: totals.orderTaxAmount,
+    discount: totals.discountAmount,
+    grandTotal: totals.grandTotal,
+    customerName,
+    storeName: "Nest POS",
+    currencySymbol: "৳",
+    updatedAt: Date.now(),
+  }), [cart, totals, customerName]);
+
+  useCustomerDisplaySync(displayPayload);
 
   // Barcode lookup — find product by code, add to cart
   const { refetch: refetchProducts } = useGetProductsQuery({ pageSize: 1 });
@@ -209,6 +246,50 @@ export default function POSPage() {
     setTimeout(() => window.print(), 100);
   };
 
+  const printThermalReceipt = async () => {
+    if (!lastSale) return;
+    const defaultPrinter = printersData?.data?.find((p) => p.isDefault && p.isActive)
+      ?? printersData?.data?.find((p) => p.type === "RECEIPT" && p.isActive);
+    if (!defaultPrinter) {
+      toast.error("No active receipt printer configured. Add one in Settings → Printers.");
+      return;
+    }
+    if (defaultPrinter.connectionType !== "BROWSER" && defaultPrinter.connectionType !== "USB") {
+      toast.error(`Thermal print requires BROWSER/USB printer. Configured: ${defaultPrinter.connectionType}`);
+      return;
+    }
+    try {
+      const buf = buildReceipt({
+        storeName: "Nest POS",
+        referenceNo: lastSale.referenceNo,
+        date: new Date(lastSale.createdAt).toLocaleString(),
+        cashier: user ? `${user.firstName} ${user.lastName}` : undefined,
+        customer: lastSale.customer?.name ?? "Walk-in",
+        items: (lastSale.items ?? []).map((it: any) => ({
+          name: it.productName,
+          qty: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          subtotal: Number(it.subtotal),
+        })),
+        subtotal: Number(lastSale.subtotal),
+        tax: Number(lastSale.orderTaxAmount ?? 0),
+        discount: Number(lastSale.discountAmount ?? 0),
+        grandTotal: Number(lastSale.grandTotal),
+        paid: Number(lastSale.paidAmount ?? 0),
+        currencySymbol: "৳",
+        footer: "Thank you!",
+      }, defaultPrinter.characterWidth);
+      await printOnce(buf);
+      toast.success("Receipt sent to printer");
+    } catch (err: any) {
+      toast.error(err.message || "Print failed");
+    }
+  };
+
+  const openCustomerDisplay = () => {
+    window.open("/customer-display", "customer-display", "width=1024,height=768,popup=yes");
+  };
+
   return (
     <div className="h-screen flex flex-col">
       {/* Top bar */}
@@ -252,7 +333,11 @@ export default function POSPage() {
           ))}
         </select>
 
-        <div className="ml-auto text-sm text-base-content/60">
+        <button onClick={openCustomerDisplay} className="btn btn-sm btn-outline ml-auto">
+          🖥 Display
+        </button>
+
+        <div className="text-sm text-base-content/60">
           {user?.firstName} • {new Date().toLocaleDateString()}
         </div>
       </div>
@@ -283,8 +368,9 @@ export default function POSPage() {
             </div>
             <Receipt sale={lastSale} />
             <div className="flex gap-2 mt-4 receipt-controls">
-              <button onClick={printReceipt} className="btn btn-primary flex-1">🖨 Print</button>
-              <button onClick={() => setShowReceipt(false)} className="btn btn-outline flex-1">New Sale</button>
+              <button onClick={printThermalReceipt} className="btn btn-primary flex-1">🖨 Thermal</button>
+              <button onClick={printReceipt} className="btn btn-outline flex-1">Browser Print</button>
+              <button onClick={() => setShowReceipt(false)} className="btn btn-ghost">New Sale</button>
             </div>
           </div>
         </div>
