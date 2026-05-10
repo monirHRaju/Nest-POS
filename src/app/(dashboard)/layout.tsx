@@ -2,6 +2,9 @@ import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import Breadcrumb from "@/components/layout/Breadcrumb";
 
+// Authenticated app — never prerender statically
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({
   children,
 }: {

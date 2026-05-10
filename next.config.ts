@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
     // TODO: fix tenantId injection types in service routes, then remove.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       {
