@@ -22,18 +22,26 @@ function LoginForm() {
       email: formData.get("email") as string,
       password: formData.get("password") as string,
       redirect: false,
+      redirectTo: callbackUrl,
     });
 
     setLoading(false);
 
-    // NextAuth v5 returns { url } even on failure — check for /login redirect
-    const failed = !!result?.error || (result?.url && new URL(result.url).pathname === "/login");
-    if (failed) {
+    if (result?.error) {
       setError("Invalid email or password");
-    } else {
-      router.push(callbackUrl);
-      router.refresh();
+      return;
     }
+
+    // Verify session actually established before redirecting
+    const sessionRes = await fetch("/api/auth/session");
+    const session = await sessionRes.json();
+    if (!session?.user) {
+      setError("Invalid email or password");
+      return;
+    }
+
+    router.push(callbackUrl);
+    router.refresh();
   }
 
   return (

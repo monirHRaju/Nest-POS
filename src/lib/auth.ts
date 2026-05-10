@@ -90,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      console.log("[auth] jwt callback", { hasUser: !!user, tokenId: token.id });
       if (user) {
         token.id = user.id;
         token.tenantId = user.tenantId;
@@ -103,15 +104,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      console.log("[auth] session callback", { tokenId: token.id });
       session.user.id = token.id as string;
       session.user.tenantId = token.tenantId as string | null;
       session.user.firstName = token.firstName as string;
       session.user.lastName = token.lastName as string;
-      session.user.role = token.role as import("@/generated/prisma/client").UserRole | null;
+      session.user.role = token.role as any;
       session.user.warehouseId = (token.warehouseId as string) || null;
       session.user.permissions = (token.permissions as Record<string, boolean>) || {};
       session.user.isSuperAdmin = (token.isSuperAdmin as boolean) || false;
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      console.log("[auth] redirect callback", { url, baseUrl });
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
     },
   },
 });
