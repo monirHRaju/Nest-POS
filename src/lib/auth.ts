@@ -34,6 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (user) {
           const isValid = await bcrypt.compare(password, user.password);
+          console.log("[auth] login attempt", { email, found: !!user, valid: isValid, hashPrefix: user.password.slice(0, 7) });
           if (!isValid) return null;
 
           await prisma.user.update({
