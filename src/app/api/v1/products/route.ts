@@ -1,5 +1,6 @@
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error, parseSearchParams } from "@/lib/api-response";
+import { checkPlanLimit, requireMutationAccess } from "@/lib/saas/limits";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -89,6 +90,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const data = createSchema.parse(body);
+
+    // Subscription/trial gate
+    const access = await requireMutationAccess(user.tenantId);
+    if (!access.ok) return error(access.error!, access.status!);
+
+    // Plan limit check
+    const limitErr = await checkPlanLimit(user.tenantId, "products");
+    if (limitErr) return error(limitErr, 400);
 
     // Check code uniqueness
     const existing = await user.db.product.findFirst({ where: { code: data.code } });

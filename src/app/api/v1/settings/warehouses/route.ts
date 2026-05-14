@@ -1,5 +1,6 @@
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error, parseSearchParams } from "@/lib/api-response";
+import { checkPlanLimit, requireMutationAccess } from "@/lib/saas/limits";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -55,27 +56,13 @@ export async function POST(req: Request) {
     const { name, code, phone, email, address, city, state, country, isDefault } =
       createSchema.parse(body);
 
-    // Check plan limits
-    const tenant = await user.db.tenant.findUnique({
-      where: { id: user.tenantId },
-      include: { plan: true },
-    });
+    // Subscription/trial gate
+    const access = await requireMutationAccess(user.tenantId);
+    if (!access.ok) return error(access.error!, access.status!);
 
-    if (!tenant) {
-      return error("Tenant not found", 404);
-    }
-
-    if (tenant.plan) {
-      const warehouseCount = await user.db.warehouse.count({});
-      const maxWarehouses = tenant.plan.maxWarehouses || 1;
-
-      if (warehouseCount >= maxWarehouses) {
-        return error(
-          `Plan limit reached. Maximum ${maxWarehouses} warehouse(s) allowed.`,
-          400
-        );
-      }
-    }
+    // Plan limit check
+    const limitErr = await checkPlanLimit(user.tenantId, "warehouses");
+    if (limitErr) return error(limitErr, 400);
 
     // Check if code already exists
     const existing = await user.db.warehouse.findFirst({

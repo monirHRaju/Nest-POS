@@ -2,6 +2,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error, parseSearchParams } from "@/lib/api-response";
 import { generateReferenceNo, calcPaymentStatus } from "@/lib/services/purchaseService";
 import { applySaleStock, validateSaleStock } from "@/lib/services/saleService";
+import { requireMutationAccess } from "@/lib/saas/limits";
 import { z } from "zod";
 
 const itemSchema = z.object({
@@ -99,6 +100,10 @@ export async function POST(req: Request) {
   if (!user) return error("Unauthorized", 401);
 
   try {
+    // Subscription/trial gate
+    const access = await requireMutationAccess(user.tenantId);
+    if (!access.ok) return error(access.error!, access.status!);
+
     const body = await req.json();
     const parsed = createSchema.parse(body);
 

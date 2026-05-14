@@ -154,6 +154,7 @@ export const menuItems: MenuItem[] = [
       { label: "Email Templates", href: "/settings/email-templates", icon: "", permission: "settings.edit" },
       { label: "Site Logs", href: "/settings/site-logs", icon: "", permission: "settings.edit" },
       { label: "Backups", href: "/settings/backups", icon: "", permission: "settings.backups" },
+      { label: "Billing & Plan", href: "/settings/billing", icon: "" },
     ],
   },
 ];

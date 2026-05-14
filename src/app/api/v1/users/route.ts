@@ -1,6 +1,7 @@
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { ok, error, parseSearchParams } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { checkPlanLimit, requireMutationAccess } from "@/lib/saas/limits";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -73,18 +74,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     const parsed = createSchema.parse(body);
 
+    // Subscription/trial gate
+    const access = await requireMutationAccess(user.tenantId);
+    if (!access.ok) return error(access.error!, access.status!);
+
     // Email unique within tenant
     const existing = await user.db.user.findFirst({ where: { email: parsed.email } });
     if (existing) return error("Email already in use", 400);
 
     // Plan limit check
-    const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } });
-    if (tenant) {
-      const userCount = await user.db.user.count();
-      if (userCount >= tenant.maxUsers) {
-        return error(`User limit reached (${tenant.maxUsers}). Upgrade plan to add more.`, 400);
-      }
-    }
+    const limitErr = await checkPlanLimit(user.tenantId, "users");
+    if (limitErr) return error(limitErr, 400);
 
     const hashedPassword = await bcrypt.hash(parsed.password, 12);
     const { password, ...rest } = parsed;

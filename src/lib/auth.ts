@@ -34,7 +34,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (user) {
           const isValid = await bcrypt.compare(password, user.password);
-          console.log("[auth] login attempt", { email, found: !!user, valid: isValid, hashPrefix: user.password.slice(0, 7) });
           if (!isValid) return null;
 
           await prisma.user.update({
@@ -90,7 +89,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
-      console.log("[auth] jwt callback", { hasUser: !!user, tokenId: token.id });
       if (user) {
         token.id = user.id;
         token.tenantId = user.tenantId;
@@ -104,7 +102,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      console.log("[auth] session callback", { tokenId: token.id });
       session.user.id = token.id as string;
       session.user.tenantId = token.tenantId as string | null;
       session.user.firstName = token.firstName as string;
@@ -116,7 +113,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
     async redirect({ url, baseUrl }) {
-      console.log("[auth] redirect callback", { url, baseUrl });
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
